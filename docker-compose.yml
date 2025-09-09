@@ -1,0 +1,15 @@
+# docker-compose.yml
+
+services:
+  cursor-agent:
+    build: .
+    environment:
+      - CURSOR_API_KEY=${CURSOR_API_KEY}
+      - CURSOR_PROMPT=${CURSOR_PROMPT}
+      - CURSOR_WORKSPACE=/app/workspace
+    volumes:
+      - ./workspace:/app/workspace
+    ports:
+      - "8080:8080"
+    stdin_open: true
+    tty: true
