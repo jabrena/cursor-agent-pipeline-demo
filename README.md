@@ -1,6 +1,6 @@
-# Cursor Agent Pipeline Demo
+# Cursor Agent for Java Hello World
 
-Docker setup with real Cursor Agent for AI-powered code generation.
+First steps to understand how to use AI Agent to generate Java Hello World
 
 ## Quick Start
 
