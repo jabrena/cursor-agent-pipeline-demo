@@ -7,7 +7,31 @@ RUN apt-get update && apt-get install -y \
     git \
     wget \
     unzip \
+    software-properties-common \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Java 24 JDK from Adoptium (Eclipse Temurin)
+# Note: Java 24 may not be available yet, so we'll try the latest available or use a direct download
+RUN wget -O - https://packages.adoptium.net/artifactory/api/gpg/key/public | gpg --dearmor | tee /etc/apt/trusted.gpg.d/adoptium.gpg > /dev/null \
+    && echo "deb https://packages.adoptium.net/artifactory/deb $(awk -F= '/^VERSION_CODENAME/{print$2}' /etc/os-release) main" | tee /etc/apt/sources.list.d/adoptium.list \
+    && apt-get update
+
+# Try to install Java 24, fallback to latest available if not found
+RUN apt-get install -y temurin-24-jdk && rm -rf /var/lib/apt/lists/*
+
+# Dynamically set JAVA_HOME to the installed version
+RUN JAVA_HOME_DIR=$(find /usr/lib/jvm -name "temurin-*-jdk*" | head -1) \
+    && echo "export JAVA_HOME=$JAVA_HOME_DIR" >> /etc/environment \
+    && echo "export PATH=\$JAVA_HOME/bin:\$PATH" >> /etc/environment
+
+# Set JAVA_HOME for current build context
+ENV JAVA_HOME=/usr/lib/jvm/temurin-24-jdk-amd64
+RUN [ -d "$JAVA_HOME" ] || export JAVA_HOME=$(find /usr/lib/jvm -name "temurin-*-jdk*" | head -1)
+ENV PATH="$JAVA_HOME/bin:$PATH"
+
+# Verify Java installation and show version
+RUN java -version && javac -version
 
 # Create app directory
 WORKDIR /app
@@ -35,6 +59,7 @@ RUN if [ -d "/tmp/build/config" ]; then \
 ENV CURSOR_API_KEY=""
 ENV CURSOR_PROMPT=""
 ENV CURSOR_WORKSPACE="/app/workspace"
+ENV CURSOR_MODEL=""
 
 # Create entrypoint script
 RUN cat > /app/entrypoint.sh << 'EOF'
@@ -43,7 +68,7 @@ set -e
 
 # Check if API token is provided
 if [ -z "$CURSOR_API_KEY" ]; then
-    echo "Error: CURSOR_API_TOKEN environment variable is required"
+    echo "Error: CURSOR_API_KEY environment variable is required"
     exit 1
 fi
 
@@ -73,7 +98,13 @@ if command -v cursor-agent >/dev/null 2>&1; then
     
     # Start cursor-agent with the provided prompt and API key
     # Use --print and --force flags for non-interactive execution
-    exec cursor-agent --api-key "$CURSOR_API_KEY" --print --force "$CURSOR_PROMPT" "$@"
+    MODEL_FLAG=""
+    if [ -n "$CURSOR_MODEL" ]; then
+        MODEL_FLAG="--model $CURSOR_MODEL"
+        echo "Using model: $CURSOR_MODEL"
+    fi
+    
+    exec cursor-agent --api-key "$CURSOR_API_KEY" --print --force $MODEL_FLAG "$CURSOR_PROMPT" "$@"
 else
     echo "Error: cursor-agent not found in PATH"
     echo "PATH: $PATH"
